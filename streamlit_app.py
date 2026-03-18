@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from importlib import import_module
 from pathlib import Path
@@ -73,6 +74,43 @@ def _extract_gemini_text(response: Any) -> str:
     return ""
 
 
+def _clean_slide_text_for_prompt(text: str, max_chars: int = 7000) -> str:
+    """Clean extracted slide text to reduce noisy narration outputs."""
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [ln.strip() for ln in cleaned.split("\n") if ln.strip()]
+
+    filtered: list[str] = []
+    for ln in lines:
+        # Drop standalone numbers like page counters.
+        if re.fullmatch(r"\d{1,3}", ln):
+            continue
+        filtered.append(ln)
+
+    normalized = "\n".join(filtered)
+    normalized = re.sub(r"[ \t]+", " ", normalized).strip()
+    if len(normalized) > max_chars:
+        normalized = normalized[:max_chars].rstrip() + "\n[truncated]"
+    return normalized
+
+
+def _build_voiceover_prompt(slide_number: int, slide_text: str) -> str:
+    """Build a strict, content-grounded prompt for slide narration."""
+    return (
+        "You are a presentation narrator for business slides.\n"
+        "Write narration that stays strictly grounded in the provided slide text.\n"
+        "Rules:\n"
+        "1) Use only information present in the slide text.\n"
+        "2) Preserve important numbers, percentages, dates, and named entities exactly.\n"
+        "3) Keep to 2-4 concise sentences.\n"
+        "4) Sound natural and spoken, but do not add external facts.\n"
+        "5) Do not start with 'This slide' or 'In this slide'.\n"
+        "6) If a detail is unclear, skip it instead of guessing.\n\n"
+        f"Slide number: {slide_number}\n"
+        f"Slide text:\n{slide_text}\n\n"
+        "Narration:"
+    )
+
+
 def _generate_voiceovers_with_gemini(
     slide_texts: list[str],
     model: str,
@@ -86,12 +124,18 @@ def _generate_voiceovers_with_gemini(
 
     try:
         genai = import_module("google.genai")
+        genai_types = import_module("google.genai.types")
     except ImportError as exc:
         raise RuntimeError(
             "google-genai is not installed. Add it to requirements and redeploy."
         ) from exc
 
     client = genai.Client(api_key=api_key)
+    generation_config = genai_types.GenerateContentConfig(
+        temperature=0.2,
+        top_p=0.9,
+        max_output_tokens=220,
+    )
 
     voiceovers: list[str] = []
     total_input_tokens = 0
@@ -106,14 +150,14 @@ def _generate_voiceovers_with_gemini(
             voiceovers.append(f"Slide {i + 1}.")
             continue
 
-        prompt = (
-            "You are a presentation narrator. Write a concise, natural spoken voiceover "
-            "(2-4 sentences) for the following slide content. Write it conversationally, "
-            "as if explaining to an audience. Do NOT start with 'This slide' or 'In this slide'.\n\n"
-            f"Slide content:\n{text}\n\nVoiceover:"
-        )
+        clean_text = _clean_slide_text_for_prompt(text)
+        prompt = _build_voiceover_prompt(i + 1, clean_text)
 
-        response = client.models.generate_content(model=model, contents=prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=generation_config,
+        )
         vo = _extract_gemini_text(response)
         if not vo:
             vo = f"Slide {i + 1}."
