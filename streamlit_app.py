@@ -193,7 +193,7 @@ def main() -> None:
     with st.expander("Settings", expanded=True):
         model = st.text_input("LLM model", value=_default_model())
         audio_speed = st.slider("Audio speed", min_value=0.75, max_value=2.00, value=1.50, step=0.05)
-        embed_method = st.selectbox("Embed method", options=["auto", "com", "ooxml"], index=0)
+        embed_method = st.selectbox("Embed method", options=["auto", "com", "python-pptx", "ooxml"], index=0)
 
     if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
         st.warning("Set GEMINI_API_KEY in Streamlit secrets before running generation.")

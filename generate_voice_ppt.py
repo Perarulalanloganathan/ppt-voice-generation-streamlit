@@ -23,7 +23,7 @@ Requirements:
         DRAUP_LLM_MODEL (default: gemini/gemini-2.5-flash-lite)
         DRAUP_INPUT_PRICE_PER_MILLION (default: 0.10)
         DRAUP_OUTPUT_PRICE_PER_MILLION (default: 0.40)
-        PPT_AUDIO_EMBED_METHOD (default: auto; values: auto|com|ooxml)
+        PPT_AUDIO_EMBED_METHOD (default: auto; values: auto|com|python-pptx|ooxml)
     Install: pip install draup_packages python-pptx gTTS lxml python-dotenv imageio-ffmpeg
     Optional on Windows (recommended for stable audio embedding): pip install pywin32
     Note: audio speed adjustment requires FFmpeg. This script auto-uses imageio-ffmpeg if system FFmpeg is missing.
@@ -42,6 +42,7 @@ from typing import Any
 
 from lxml import etree
 from pptx import Presentation
+from pptx.util import Emu
 from gtts import gTTS
 from dotenv import load_dotenv
 
@@ -589,11 +590,44 @@ def embed_audio_with_powerpoint(pptx_path: str, audio_paths: list[str], output_p
         pythoncom.CoUninitialize()
 
 
+def embed_audio_with_python_pptx(pptx_path: str, audio_paths: list[str], output_path: str):
+    """
+    Embed audio via python-pptx media shapes.
+    This path is more compatibility-friendly than low-level OOXML editing, but
+    auto-play behavior depends on PowerPoint defaults.
+    """
+    print("Step 4: Embedding audio into PPTX (python-pptx)...")
+    prs = Presentation(pptx_path)
+
+    for i, audio_path in enumerate(audio_paths):
+        if i >= len(prs.slides):
+            break
+        if not os.path.isfile(audio_path):
+            print(f"  Slide {i + 1}: audio file missing — skipped")
+            continue
+
+        print(f"  Slide {i + 1}...")
+        slide = prs.slides[i]
+        # Add a tiny media shape in a corner to keep it unobtrusive.
+        slide.shapes.add_movie(
+            movie_file=audio_path,
+            left=Emu(0),
+            top=Emu(0),
+            width=Emu(91440),
+            height=Emu(91440),
+            mime_type='audio/mpeg',
+        )
+
+    prs.save(output_path)
+    print(f"\n  Saved -> {output_path}")
+
+
 def embed_audio(pptx_path: str, audio_paths: list[str], output_path: str):
     """
     Embed audio with a robust strategy:
     - On Windows, prefer native PowerPoint COM embedding for maximum compatibility.
-    - Otherwise, use OOXML fallback.
+    - On non-Windows, prefer python-pptx media embedding.
+    - Fall back to OOXML if other methods fail.
     """
     method = os.environ.get('PPT_AUDIO_EMBED_METHOD', 'auto').strip().lower()
 
@@ -604,7 +638,19 @@ def embed_audio(pptx_path: str, audio_paths: list[str], output_path: str):
         except Exception as exc:
             if method == 'com':
                 raise
-            print(f"WARNING: PowerPoint COM embedding failed ({exc}). Falling back to OOXML.")
+            print(
+                f"WARNING: PowerPoint COM embedding failed ({exc}). "
+                "Falling back to python-pptx/OOXML."
+            )
+
+    if method in ('auto', 'python-pptx'):
+        try:
+            embed_audio_with_python_pptx(pptx_path, audio_paths, output_path)
+            return
+        except Exception as exc:
+            if method == 'python-pptx':
+                raise
+            print(f"WARNING: python-pptx embedding failed ({exc}). Falling back to OOXML.")
 
     embed_audio_into_pptx(pptx_path, audio_paths, output_path)
 
