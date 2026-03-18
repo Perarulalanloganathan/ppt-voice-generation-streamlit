@@ -1,0 +1,9 @@
+draup_packages
+streamlit
+python-pptx
+gTTS
+lxml
+python-dotenv
+imageio-ffmpeg
+pywin32; platform_system == "Windows"
+pypdf

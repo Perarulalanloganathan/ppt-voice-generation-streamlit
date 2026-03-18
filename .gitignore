@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+
+# Local env
+.env
+.streamlit/secrets.toml
+
+# Notebook and debug outputs
+debug_audio/
+
+# Generated files
+*_with_audio*.pptx
+*.pptx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
