@@ -31,5 +31,6 @@ After deployment, Streamlit gives you a public app URL to share.
 
 - Audio speed defaults to 1.5x and can be changed in the app UI.
 - App uses Gemini API directly (set GEMINI_API_KEY in secrets).
+- Users can also paste a Gemini API key directly in the app settings.
 - On Linux/Cloud, embedding uses python-pptx first for better compatibility, then OOXML fallback.
 - packages.txt includes ffmpeg for audio tempo processing.

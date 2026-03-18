@@ -73,11 +73,15 @@ def _extract_gemini_text(response: Any) -> str:
     return ""
 
 
-def _generate_voiceovers_with_gemini(slide_texts: list[str], model: str) -> tuple[list[str], dict[str, float]]:
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+def _generate_voiceovers_with_gemini(
+    slide_texts: list[str],
+    model: str,
+    api_key: str | None = None,
+) -> tuple[list[str], dict[str, float]]:
+    api_key = (api_key or "").strip() or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError(
-            "Missing Gemini API key. Set GEMINI_API_KEY (or GOOGLE_API_KEY) in Streamlit secrets."
+            "Missing Gemini API key. Paste it in the app or set GEMINI_API_KEY/GOOGLE_API_KEY in secrets."
         )
 
     try:
@@ -144,6 +148,7 @@ def _run_pipeline(
     model: str,
     audio_speed: float,
     embed_method: str,
+    gemini_api_key: str | None = None,
 ) -> tuple[bytes, str, dict[str, float], int]:
     previous_speed = os.environ.get("PPT_AUDIO_SPEED")
     previous_embed = os.environ.get("PPT_AUDIO_EMBED_METHOD")
@@ -163,7 +168,11 @@ def _run_pipeline(
             audio_dir.mkdir(parents=True, exist_ok=True)
 
             slide_texts = g.extract_slide_texts(str(input_path))
-            voiceovers, token_summary = _generate_voiceovers_with_gemini(slide_texts, model)
+            voiceovers, token_summary = _generate_voiceovers_with_gemini(
+                slide_texts,
+                model,
+                api_key=gemini_api_key,
+            )
             audio_paths = g.generate_audio_files(voiceovers, str(audio_dir))
             g.embed_audio(str(input_path), audio_paths, str(output_path))
 
@@ -192,11 +201,18 @@ def main() -> None:
 
     with st.expander("Settings", expanded=True):
         model = st.text_input("LLM model", value=_default_model())
+        gemini_api_key = st.text_input(
+            "Gemini API key",
+            type="password",
+            placeholder="Paste your Gemini key (AIza...)",
+            help="Used only for this run. Leave empty to use app secrets.",
+        )
         audio_speed = st.slider("Audio speed", min_value=0.75, max_value=2.00, value=1.50, step=0.05)
         embed_method = st.selectbox("Embed method", options=["auto", "com", "python-pptx", "ooxml"], index=0)
 
-    if not (os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")):
-        st.warning("Set GEMINI_API_KEY in Streamlit secrets before running generation.")
+    has_key = bool(gemini_api_key.strip()) or bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+    if not has_key:
+        st.warning("Paste a Gemini API key above or set GEMINI_API_KEY in secrets before running generation.")
 
     uploaded_file = st.file_uploader("Upload PowerPoint", type=["pptx"])
     run_clicked = st.button("Generate Output PPT", type="primary", use_container_width=True)
@@ -214,6 +230,7 @@ def main() -> None:
                     model=model,
                     audio_speed=audio_speed,
                     embed_method=embed_method,
+                    gemini_api_key=gemini_api_key,
                 )
             except Exception as exc:
                 st.error(f"Generation failed: {exc}")
