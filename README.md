@@ -9,7 +9,7 @@ This app lets users upload a PowerPoint file (.pptx), generate per-slide narrati
 
 2. (Optional) Create local secrets file:
    - Copy .streamlit/secrets.toml.example to .streamlit/secrets.toml
-   - Fill your Draup/LLM credentials
+   - Fill your Gemini API key and optional model settings
 
 3. Start app:
    streamlit run streamlit_app.py
@@ -30,5 +30,6 @@ After deployment, Streamlit gives you a public app URL to share.
 ## Notes
 
 - Audio speed defaults to 1.5x and can be changed in the app UI.
+- App uses Gemini API directly (set GEMINI_API_KEY in secrets).
 - On Linux/Cloud, embedding uses OOXML fallback automatically if COM is unavailable.
 - packages.txt includes ffmpeg for audio tempo processing.

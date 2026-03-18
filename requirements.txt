@@ -1,5 +1,5 @@
-draup_packages
 streamlit
+google-genai
 python-pptx
 gTTS
 lxml
